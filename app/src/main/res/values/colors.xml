@@ -2,12 +2,16 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="fundaments_background">#101418</color>
-    <color name="fundaments_surface">#182027</color>
-    <color name="fundaments_surface_high">#22303A</color>
-    <color name="fundaments_text">#EAF2F8</color>
-    <color name="fundaments_muted">#A7B6C2</color>
-    <color name="fundaments_accent">#45D483</color>
-    <color name="fundaments_warning">#F3C14B</color>
-    <color name="fundaments_error">#FF6B6B</color>
+    <color name="fundaments_background">#FFF3D7</color>
+    <color name="fundaments_surface">#FFE8BD</color>
+    <color name="fundaments_surface_high">#FFFFFF</color>
+    <color name="fundaments_card">#FFFFFF</color>
+    <color name="fundaments_option">#FFF8EC</color>
+    <color name="fundaments_option_border">#F2D8AD</color>
+    <color name="fundaments_text">#4A2118</color>
+    <color name="fundaments_muted">#875B4B</color>
+    <color name="fundaments_accent">#F48B42</color>
+    <color name="fundaments_warning">#8F4AE8</color>
+    <color name="fundaments_success">#2FA56F</color>
+    <color name="fundaments_error">#E85151</color>
 </resources>
