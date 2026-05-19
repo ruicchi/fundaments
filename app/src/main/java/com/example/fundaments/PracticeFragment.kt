@@ -4,9 +4,9 @@ import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
 import android.view.LayoutInflater
-import android.view.inputmethod.EditorInfo
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -18,6 +18,7 @@ import java.util.Locale
 
 class PracticeFragment : Fragment() {
     private lateinit var dbHelper: DatabaseHelper
+    private lateinit var sessionManager: SessionManager
     private lateinit var categoryText: TextView
     private lateinit var promptText: TextView
     private lateinit var answerInput: EditText
@@ -25,9 +26,12 @@ class PracticeFragment : Fragment() {
     private lateinit var submitButton: Button
     private lateinit var nextButton: Button
     private var currentQuestion: PracticeQuestion? = null
+    private var currentProfile: UserProfile? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         dbHelper = DatabaseHelper(requireContext())
+        sessionManager = SessionManager(requireContext())
+        currentProfile = sessionManager.getCurrentUserId()?.let { dbHelper.getUserProfile(it) }
 
         val root = ScrollView(requireContext()).apply {
             setBackgroundColor(color(R.color.fundaments_background))
@@ -39,11 +43,14 @@ class PracticeFragment : Fragment() {
             setPadding(dp(20), dp(24), dp(20), dp(24))
         }
 
-        val title = textView("Daily Diagnostic Quiz", 26f, R.color.fundaments_text, true)
-        val subtitle = textView(
-            "Complete the missing grammar element. Each answer is logged locally for diagnostics.",
-            15f,
-            R.color.fundaments_muted
+        content.addView(textView("Daily Diagnostic Quiz", 26f, R.color.fundaments_text, true))
+        content.addView(
+            textView(
+                "Complete the missing grammar element. Questions match the selected learner profile.",
+                15f,
+                R.color.fundaments_muted
+            ),
+            blockParams(top = 4)
         )
 
         categoryText = textView("", 14f, R.color.fundaments_accent, true)
@@ -79,8 +86,6 @@ class PracticeFragment : Fragment() {
             setPadding(0, dp(18), 0, 0)
         }
 
-        content.addView(title)
-        content.addView(subtitle)
         content.addView(categoryText, blockParams(top = 28))
         content.addView(promptText)
         content.addView(answerInput, blockParams(top = 8))
@@ -99,24 +104,32 @@ class PracticeFragment : Fragment() {
     }
 
     private fun loadQuestion() {
-        currentQuestion = dbHelper.getRandomQuestion()
+        val profile = currentProfile
+        if (profile?.isComplete != true) {
+            Toast.makeText(requireContext(), "Complete learner preferences first.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        currentQuestion = dbHelper.getRandomQuestion(profile.language.orEmpty(), profile.proficiency.orEmpty())
         val question = currentQuestion
         if (question == null) {
             Toast.makeText(requireContext(), "No practice questions found.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        categoryText.text = question.category.uppercase(Locale.getDefault())
+        categoryText.text = "${question.language} / ${question.proficiency} / ${question.category}".uppercase(Locale.getDefault())
         promptText.text = question.promptSentence
         answerInput.setText("")
         answerInput.isEnabled = true
         feedbackText.text = ""
+        feedbackText.setTextColor(color(R.color.fundaments_muted))
         submitButton.isEnabled = true
         nextButton.visibility = View.GONE
     }
 
     private fun submitAnswer() {
         val question = currentQuestion ?: return
+        val userId = currentProfile?.userId ?: return
         val rawAnswer = answerInput.text.toString()
         if (rawAnswer.isBlank()) {
             answerInput.error = "Answer required"
@@ -124,7 +137,7 @@ class PracticeFragment : Fragment() {
         }
 
         val isCorrect = normalize(rawAnswer) == normalize(question.correctAnswer)
-        dbHelper.logAnswer(question.questionId, isCorrect)
+        dbHelper.logAnswer(userId, question.questionId, isCorrect)
 
         val feedbackColor = if (isCorrect) R.color.fundaments_accent else R.color.fundaments_error
         feedbackText.setTextColor(color(feedbackColor))
@@ -169,9 +182,7 @@ class PracticeFragment : Fragment() {
         return LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            topMargin = dp(top)
-        }
+        ).apply { topMargin = dp(top) }
     }
 
     private fun color(resId: Int): Int = requireContext().getColor(resId)

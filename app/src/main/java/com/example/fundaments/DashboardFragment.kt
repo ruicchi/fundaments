@@ -1,9 +1,11 @@
 package com.example.fundaments
 
+import android.graphics.Color
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
@@ -12,10 +14,12 @@ import androidx.fragment.app.Fragment
 
 class DashboardFragment : Fragment() {
     private lateinit var dbHelper: DatabaseHelper
+    private lateinit var sessionManager: SessionManager
     private lateinit var content: LinearLayout
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         dbHelper = DatabaseHelper(requireContext())
+        sessionManager = SessionManager(requireContext())
 
         val root = ScrollView(requireContext()).apply {
             setBackgroundColor(color(R.color.fundaments_background))
@@ -45,14 +49,20 @@ class DashboardFragment : Fragment() {
     private fun renderDashboard() {
         content.removeAllViews()
 
-        val stats = dbHelper.getDashboardStats()
-        val categories = dbHelper.getCategoryPerformance(limit = 3)
-        val questionCount = dbHelper.getQuestionCount()
+        val profile = sessionManager.getCurrentUserId()?.let { dbHelper.getUserProfile(it) }
+        if (profile?.isComplete != true) {
+            content.addView(textView("Profile not ready", 24f, R.color.fundaments_text, true))
+            return
+        }
+
+        val stats = dbHelper.getDashboardStats(profile.userId)
+        val categories = dbHelper.getCategoryPerformance(profile.userId, limit = 3)
+        val questionCount = dbHelper.getQuestionCount(profile.language.orEmpty(), profile.proficiency.orEmpty())
 
         content.addView(textView("Fundaments", 28f, R.color.fundaments_text, true))
         content.addView(
             textView(
-                "Offline grammar diagnostics for structural language practice.",
+                "${profile.learnerName} is practicing ${profile.language} at ${profile.proficiency} level.",
                 15f,
                 R.color.fundaments_muted
             ),
@@ -60,10 +70,11 @@ class DashboardFragment : Fragment() {
         )
 
         content.addView(sectionLabel("PROGRESS"), blockParams(top = 28))
-        content.addView(statBlock("Overall Accuracy", "${stats.accuracyPercent}%", "Based on ${stats.totalAnswered} logged answers"))
-        content.addView(statBlock("Correct", stats.correctAnswers.toString(), "Answers that matched the expected structure"))
-        content.addView(statBlock("Needs Review", stats.incorrectAnswers.toString(), "Errors mapped to grammar categories"))
-        content.addView(statBlock("Question Bank", questionCount.toString(), "Local SQLite practice prompts"))
+        content.addView(statBlock("Overall Accuracy", "${stats.accuracyPercent}%", "Based on ${stats.totalAnswered} logged answers"), blockParams(top = 10))
+        content.addView(statBlock("Correct", stats.correctAnswers.toString(), "Answers that matched the expected structure"), blockParams(top = 10))
+        content.addView(statBlock("Needs Review", stats.incorrectAnswers.toString(), "Errors mapped to grammar categories"), blockParams(top = 10))
+        content.addView(statBlock("Practice Set", questionCount.toString(), "Questions for this language and level"), blockParams(top = 10))
+        content.addView(button("Switch Learner") { (requireActivity() as MainActivity).switchLearner() }, blockParams(top = 12))
 
         content.addView(sectionLabel("WEAKEST CATEGORIES"), blockParams(top = 24))
         if (categories.isEmpty()) {
@@ -101,7 +112,7 @@ class DashboardFragment : Fragment() {
             addView(textView(category.category, 17f, R.color.fundaments_text, true))
             addView(
                 textView(
-                    "${category.incorrectAnswers} missed of ${category.totalAttempts} attempts • ${category.accuracyPercent}% accuracy",
+                    "${category.incorrectAnswers} missed of ${category.totalAttempts} attempts - ${category.accuracyPercent}% accuracy",
                     14f,
                     R.color.fundaments_muted
                 )
@@ -117,6 +128,17 @@ class DashboardFragment : Fragment() {
 
     private fun sectionLabel(text: String): TextView = textView(text, 13f, R.color.fundaments_warning, true)
 
+    private fun button(text: String, onClick: () -> Unit): Button {
+        return Button(requireContext()).apply {
+            this.text = text
+            textSize = 15f
+            setTextColor(Color.BLACK)
+            setBackgroundColor(color(R.color.fundaments_accent))
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            setOnClickListener { onClick() }
+        }
+    }
+
     private fun textView(text: String, sp: Float, colorRes: Int, bold: Boolean = false): TextView {
         return TextView(requireContext()).apply {
             this.text = text
@@ -131,9 +153,7 @@ class DashboardFragment : Fragment() {
         return LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            topMargin = dp(top)
-        }
+        ).apply { topMargin = dp(top) }
     }
 
     private fun color(resId: Int): Int = requireContext().getColor(resId)

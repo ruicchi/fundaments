@@ -23,11 +23,13 @@ import java.io.FileOutputStream
 
 class ReportsFragment : Fragment() {
     private lateinit var dbHelper: DatabaseHelper
+    private lateinit var sessionManager: SessionManager
     private lateinit var summaryText: TextView
     private lateinit var topCategoriesText: TextView
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         dbHelper = DatabaseHelper(requireContext())
+        sessionManager = SessionManager(requireContext())
 
         val root = ScrollView(requireContext()).apply {
             setBackgroundColor(color(R.color.fundaments_background))
@@ -42,7 +44,7 @@ class ReportsFragment : Fragment() {
         content.addView(textView("Reports", 28f, R.color.fundaments_text, true))
         content.addView(
             textView(
-                "Generate a local Monthly Syntax Diagnostic Profile from SQLite logs.",
+                "Generate a local Monthly Syntax Diagnostic Profile for the active learner.",
                 15f,
                 R.color.fundaments_muted
             ),
@@ -78,10 +80,20 @@ class ReportsFragment : Fragment() {
     }
 
     private fun renderPreview() {
-        val stats = dbHelper.getMonthlyDashboardStats()
-        val categories = dbHelper.getMonthlyCategoryPerformance(limit = 3)
+        val profile = currentProfile()
+        if (profile == null) {
+            summaryText.text = "Complete learner setup before generating reports."
+            topCategoriesText.text = ""
+            return
+        }
+
+        val stats = dbHelper.getMonthlyDashboardStats(profile.userId)
+        val categories = dbHelper.getMonthlyCategoryPerformance(profile.userId, limit = 3)
 
         summaryText.text = """
+            Learner: ${profile.learnerName}
+            Language: ${profile.language}
+            Level: ${profile.proficiency}
             Overall accuracy: ${stats.accuracyPercent}%
             Questions answered: ${stats.totalAnswered}
             Correct: ${stats.correctAnswers}
@@ -89,7 +101,7 @@ class ReportsFragment : Fragment() {
         """.trimIndent()
 
         topCategoriesText.text = if (categories.isEmpty()) {
-            "Top failed categories will appear after you answer practice questions."
+            "Top failed categories will appear after this learner answers practice questions."
         } else {
             categories.joinToString(separator = "\n") {
                 "${it.category}: ${it.incorrectAnswers} missed, ${it.accuracyPercent}% accuracy"
@@ -99,6 +111,10 @@ class ReportsFragment : Fragment() {
 
     private fun generateAndOpenPdf() {
         try {
+            if (currentProfile() == null) {
+                Toast.makeText(requireContext(), "Complete learner setup first.", Toast.LENGTH_LONG).show()
+                return
+            }
             val file = createDiagnosticPdf()
             val uri = FileProvider.getUriForFile(requireContext(), "${requireContext().packageName}.provider", file)
             val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -114,9 +130,10 @@ class ReportsFragment : Fragment() {
     }
 
     private fun createDiagnosticPdf(): File {
-        val stats = dbHelper.getMonthlyDashboardStats()
-        val categories = dbHelper.getMonthlyCategoryPerformance(limit = 3)
-        val allCategories = dbHelper.getMonthlyCategoryPerformance()
+        val profile = currentProfile() ?: error("Missing learner profile")
+        val stats = dbHelper.getMonthlyDashboardStats(profile.userId)
+        val categories = dbHelper.getMonthlyCategoryPerformance(profile.userId, limit = 3)
+        val allCategories = dbHelper.getMonthlyCategoryPerformance(profile.userId)
         val file = File(requireContext().getExternalFilesDir(null), "MonthlySyntaxDiagnosticProfile.pdf")
 
         val document = PdfDocument()
@@ -147,6 +164,10 @@ class ReportsFragment : Fragment() {
             var y = 56f
             canvas.drawText("Monthly Syntax Diagnostic Profile", 48f, y, titlePaint)
             y += 34f
+            canvas.drawText("Learner: ${profile.learnerName}", 48f, y, bodyPaint)
+            y += 18f
+            canvas.drawText("Language: ${profile.language}   Level: ${profile.proficiency}", 48f, y, bodyPaint)
+            y += 24f
             canvas.drawText("Overall accuracy: ${stats.accuracyPercent}%", 48f, y, headingPaint)
             y += 22f
             canvas.drawText("Questions answered: ${stats.totalAnswered}", 48f, y, bodyPaint)
@@ -195,6 +216,12 @@ class ReportsFragment : Fragment() {
         return file
     }
 
+    private fun currentProfile(): UserProfile? {
+        val userId = sessionManager.getCurrentUserId() ?: return null
+        val profile = dbHelper.getUserProfile(userId) ?: return null
+        return if (profile.isComplete) profile else null
+    }
+
     private fun textView(text: String, sp: Float, colorRes: Int, bold: Boolean = false): TextView {
         return TextView(requireContext()).apply {
             this.text = text
@@ -221,9 +248,7 @@ class ReportsFragment : Fragment() {
         return LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            topMargin = dp(top)
-        }
+        ).apply { topMargin = dp(top) }
     }
 
     private fun color(resId: Int): Int = requireContext().getColor(resId)

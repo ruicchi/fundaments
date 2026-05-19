@@ -1,22 +1,24 @@
 package com.example.fundaments
 
 import android.os.Bundle
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import com.google.android.material.bottomnavigation.BottomNavigationView
 
 class MainActivity : AppCompatActivity() {
+    private lateinit var bottomNav: BottomNavigationView
+    private lateinit var dbHelper: DatabaseHelper
+    private lateinit var sessionManager: SessionManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
+        dbHelper = DatabaseHelper(this)
+        sessionManager = SessionManager(this)
+        bottomNav = findViewById(R.id.bottom_navigation)
 
-        // Set Dashboard as the default fragment when the app opens
-        replaceFragment(DashboardFragment())
-
-        // Handle navigation clicks
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.nav_dashboard -> replaceFragment(DashboardFragment())
@@ -25,9 +27,59 @@ class MainActivity : AppCompatActivity() {
             }
             true
         }
+
+        routeFromSession()
     }
 
-    // Helper function to swap fragments in the FrameLayout
+    override fun onDestroy() {
+        dbHelper.close()
+        super.onDestroy()
+    }
+
+    fun onLoginComplete(userId: Int) {
+        sessionManager.setCurrentUserId(userId)
+        val profile = dbHelper.getUserProfile(userId)
+        if (profile?.isComplete == true) {
+            showMainApp()
+        } else {
+            showOnboarding()
+        }
+    }
+
+    fun onPreferencesComplete() {
+        showMainApp()
+    }
+
+    fun switchLearner() {
+        sessionManager.clearCurrentUser()
+        bottomNav.visibility = View.GONE
+        replaceFragment(LoginFragment())
+    }
+
+    private fun routeFromSession() {
+        val userId = sessionManager.getCurrentUserId()
+        val profile = userId?.let { dbHelper.getUserProfile(it) }
+        when {
+            profile == null -> {
+                bottomNav.visibility = View.GONE
+                replaceFragment(LoginFragment())
+            }
+            profile.isComplete -> showMainApp()
+            else -> showOnboarding()
+        }
+    }
+
+    private fun showOnboarding() {
+        bottomNav.visibility = View.GONE
+        replaceFragment(PreferencesFragment())
+    }
+
+    private fun showMainApp() {
+        bottomNav.visibility = View.VISIBLE
+        bottomNav.selectedItemId = R.id.nav_dashboard
+        replaceFragment(DashboardFragment())
+    }
+
     private fun replaceFragment(fragment: Fragment) {
         supportFragmentManager.beginTransaction()
             .replace(R.id.fragment_container, fragment)
