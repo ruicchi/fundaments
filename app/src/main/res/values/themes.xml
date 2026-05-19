@@ -1,8 +1,13 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Base.Theme.Fundaments" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">@color/fundaments_background</item>
+        <item name="android:colorAccent">@color/fundaments_accent</item>
+        <item name="android:navigationBarColor">@color/fundaments_surface</item>
+        <item name="android:statusBarColor">@color/fundaments_background</item>
+        <item name="colorPrimary">@color/fundaments_accent</item>
+        <item name="colorSecondary">@color/fundaments_warning</item>
     </style>
 
     <style name="Theme.Fundaments" parent="Base.Theme.Fundaments" />
